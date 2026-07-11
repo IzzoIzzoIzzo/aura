@@ -3,10 +3,18 @@
 const assert = require('node:assert');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const os = require('node:os');
+
+// Isolate into a throwaway cache so the test never reads/writes the real ~/.shaddai-aura
+// (otherwise a stale fuzzy cache entry can shadow the expected compute answer).
+const TEST_HOME = path.join(os.tmpdir(), 'aura-mcp-test-' + process.pid);
 
 function run(frames) {
   return new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [path.join(__dirname, 'mcp.js')], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const p = spawn(process.execPath, [path.join(__dirname, 'mcp.js')], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, AURA_HOME: TEST_HOME }
+    });
     let out = '';
     p.stdout.on('data', (d) => (out += d));
     p.on('error', reject);
@@ -40,5 +48,6 @@ function run(frames) {
   assert.ok(byId[5] && byId[5].result, 'oversized 500k-char prompt handled (capped), no crash');
   assert.ok(byId[6] && byId[6].result && byId[6].result.isError, 'unknown tool returns isError, not a crash');
 
+  try { require('node:fs').rmSync(TEST_HOME, { recursive: true, force: true }); } catch (_) {}
   console.log('✅ mcp.test PASS — handshake · tools · resources · free compute · oversized-input · unknown-tool');
 })().catch((e) => { console.error('❌ mcp.test FAIL:', e.message); process.exit(1); });
