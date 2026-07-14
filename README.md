@@ -4,7 +4,7 @@
 
 ### The dependency-free LLM token-saver
 
-*Part of the [⚡ SHADDAI](https://github.com/IzzoSol/Shaddai) family*
+*Part of the [⚡ SHADDAI](https://shaddai-g81x.onrender.com) family*
 
 Answer recurring prompts for **free** — cache, compute, seed, and skill fast-paths that
 never touch the model. Ships as a **CLI**, an **MCP server** (Claude / Cursor / Claude Code),
@@ -192,7 +192,7 @@ Core audited safe: no `eval` / `Function` / `child_process` / shell, bounded cac
 
 | Repo | What |
 |------|------|
-| **[Shaddai](https://github.com/IzzoSol/Shaddai)** | The sovereign AI agent empire — 7 agents, 200+ real tools |
+| **[Shaddai](https://shaddai-g81x.onrender.com)** | The sovereign AI agent empire — 7 agents, 200+ real tools |
 | **[aura](https://github.com/IzzoSol/aura)** | *(this)* dependency-free token-saver · CLI + MCP + library |
 | **[Shaddai-Clipper-Feature-](https://github.com/IzzoSol/Shaddai-Clipper-Feature-)** | Long video → captioned vertical shorts |
 
