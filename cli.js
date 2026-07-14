@@ -27,6 +27,8 @@ function usage() {
 
 ${C.b}USAGE${C.x}
   aura ask "<prompt>" [--llm] [--model <id>]   answer it the cheapest way
+  aura distill "<prompt>" | --file <path>      trim redundant instructions from a prompt
+                          [--llm] [--apply] [--json]   (protects safety/output/routing rules)
   aura learn "<prompt>" "<answer>"             cache an answer for next time
   aura skill add "<name>" --match "<pat>" --do "<answer>" [--regex] [--priority N]
                                                save a reusable skill (free forever)
@@ -88,6 +90,59 @@ async function main() {
   if (cmd === 'stats') { fmtStats(A.stats()); return; }
   if (cmd === 'where') { out(A.CACHE_FILE); return; }
   if (cmd === 'clear') { A.clearCache(); out(`${C.g}cache cleared${C.x}`); return; }
+
+  if (cmd === 'distill') {
+    const { distill, applyLLM } = require('./lib/prompt-distill');
+    const firstLine = (s) => String(s).split('\n').find((l) => l.trim()) || String(s);
+    const useLLM = argv.includes('--llm');
+    const apply = argv.includes('--apply');
+    const asJson = argv.includes('--json');
+    const fi = argv.indexOf('--file');
+    const mi = argv.indexOf('--model');
+    const model = mi >= 0 && argv[mi + 1] ? argv[mi + 1] : undefined;
+    const filePath = fi >= 0 && argv[fi + 1] ? argv[fi + 1] : null;
+
+    let text = '';
+    if (filePath) {
+      try { text = fs.readFileSync(filePath, 'utf8'); }
+      catch (e) { out(`${C.r}cannot read ${filePath}: ${e.message}${C.x}`); process.exitCode = 1; return; }
+    } else {
+      const parts = [];
+      for (let i = 1; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === '--llm' || a === '--apply' || a === '--json') continue;
+        if (a === '--model' || a === '--file') { i++; continue; }
+        parts.push(a);
+      }
+      text = parts.join(' ');
+    }
+    if (!text.trim()) { out(`${C.r}usage: aura distill "<prompt>"  |  aura distill --file <path> [--llm] [--apply] [--json]${C.x}`); process.exitCode = 1; return; }
+
+    let res = distill(text);
+    if (useLLM) {
+      const callModel = async (p) => { const r = await A.askLLM(p, model ? { model } : {}); if (r && r.ok) return r.answer; throw new Error(r && r.reason ? r.reason : 'no model'); };
+      res = await applyLLM(res, callModel);
+    }
+
+    const s = res.report.stats;
+    if (A.recordDistill) A.recordDistill(s.saved);
+
+    if (asJson) { out(JSON.stringify(res, null, 2)); }
+    else {
+      const { removed, flagged, protected: prot } = res.report;
+      out(`${C.b}AURA distill${C.x} — ${C.g}${s.saved} tokens saved${C.x} (${s.savedPct}% · ${s.tokensBefore}→${s.tokensAfter})`);
+      if (removed.length) { out(`${C.y}trimmed ${removed.length}:${C.x}`); removed.slice(0, 20).forEach((r) => out(`  ${C.d}- [${r.reason}] ${firstLine(r.text)}${C.x}`)); }
+      if (flagged.length) { out(`${C.c}flagged ${flagged.length} (review, not cut):${C.x}`); flagged.slice(0, 20).forEach((f) => out(`  ${C.d}? [${f.category}] ${firstLine(f.text)}${C.x}`)); }
+      out(`${C.d}protected ${prot.length} load-bearing line(s).${res.report.llm ? ` llm: ${res.report.llm.accepted ? 'accepted' : 'rejected (' + (res.report.llm.reason || res.report.llm.error || '') + ')'}` : ''}${C.x}`);
+      if (apply && filePath) {
+        try { fs.writeFileSync(filePath + '.bak', text); fs.writeFileSync(filePath, res.distilled); out(`${C.g}wrote ${filePath} (backup at ${filePath}.bak)${C.x}`); }
+        catch (e) { out(`${C.r}could not write ${filePath}: ${e.message}${C.x}`); process.exitCode = 1; }
+      } else if (!apply) {
+        out(`${C.d}— distilled output —${C.x}`); out(res.distilled);
+      }
+    }
+    return;
+  }
 
   if (cmd === 'learn-sessions') {
     const apply = argv.includes('--apply');

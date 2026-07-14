@@ -43,7 +43,7 @@ function writeJson(file, obj) { try { ensureDir(); fs.writeFileSync(file, JSON.s
 
 // --------------------------------------------------------------------------- stats
 function loadStats() {
-  const s = readJson(STATS_FILE, { hits: 0, misses: 0, tokensSaved: 0, byMethod: { fetch: 0, query: 0, skill: 0, compute: 0 } });
+  const s = readJson(STATS_FILE, { hits: 0, misses: 0, tokensSaved: 0, byMethod: { fetch: 0, query: 0, skill: 0, compute: 0, distill: 0 } });
   // back-fill byMethod.skill on stats files created before Stage 2
   if (s && s.byMethod && typeof s.byMethod.skill !== 'number') s.byMethod.skill = 0;
   return s;
@@ -373,6 +373,14 @@ function stats() {
 
 function clearCache() { return writeJson(CACHE_FILE, {}); }
 
+// Record prompt-distillation savings into the shared ledger (3rd pillar). `saved` is the
+// estimated tokens trimmed from a prompt/system-prompt via lib/prompt-distill.
+function recordDistill(saved) {
+  const n = Number(saved);
+  if (!Number.isFinite(n) || n <= 0) return false;
+  try { bumpStats((s) => { s.byMethod.distill = (s.byMethod.distill || 0) + 1; s.tokensSaved += Math.round(n); }); return true; } catch (_) { return false; }
+}
+
 // =========================================================================== SKILLS REGISTRY (Stage 2)
 /**
  * A "compiled program": define a named, deterministic skill
@@ -692,7 +700,7 @@ async function ask(prompt, opts = {}) {
 }
 
 module.exports = {
-  route, recordAnswer, stats, clearCache, ask, askLLM, compute, cosineSim, classifyTier, pickModel,
+  route, recordAnswer, recordDistill, stats, clearCache, ask, askLLM, compute, cosineSim, classifyTier, pickModel,
   // Stage 2 — saved-skills registry
   addSkill, listSkills, removeSkill, matchSkill, runAdapter, ADAPTERS,
   // Phase 1 — schema validation

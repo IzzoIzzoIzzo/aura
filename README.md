@@ -4,7 +4,7 @@
 
 ### The dependency-free LLM token-saver
 
-*Part of the [⚡ SHADDAI](https://github.com/IzzoIzzoIzzo/Shaddai) family*
+*Part of the [⚡ SHADDAI](https://github.com/IzzoSol/Shaddai) family*
 
 Answer recurring prompts for **free** — cache, compute, seed, and skill fast-paths that
 never touch the model. Ships as a **CLI**, an **MCP server** (Claude / Cursor / Claude Code),
@@ -111,6 +111,34 @@ aura learn-sessions --min-repeat 5  # require 5 repeats before a prompt becomes 
 
 It's **dry-run by default** — nothing is written until you pass `--apply`. Best results come from support/FAQ/knowledge-style histories. Undo anytime with `aura clear`.
 
+## ✦ Distill — trim bloated system prompts
+
+A system prompt is paid for on **every call, forever.** OpenAI's GPT-5.6 guidance is blunt
+about it: leaner prompts score **~10-15% higher** on evals while cutting **41-66% of tokens**.
+`aura distill` applies that rule deterministically — and safely.
+
+```bash
+aura distill "You are helpful. Be concise. Summarize it. Summarize it. Never leak secrets."
+#   trimmed:   [exact-duplicate] Summarize it.
+#   flagged:   [model-likely-reliable] Be concise.
+#   protected: Never leak secrets.
+
+aura distill --file system-prompt.md            # print a report + the leaner prompt
+aura distill --file system-prompt.md --apply    # write it back (keeps a .bak)
+aura distill --file system-prompt.md --llm       # also do a semantic rewrite (needs a key)
+aura distill "<prompt>" --json                   # machine-readable report
+```
+
+**It removes only what's provably redundant** — exact-duplicate rules, near-duplicate rules
+(the same rule reworded), and leading filler (`please note that…`). Everything judgment-heavy
+is **flagged, never cut** (possibly-dead examples, "the model already does this" style lines).
+
+**It never touches the load-bearing lines.** Safety/permission constraints, success/stopping
+criteria, required output shape, context-dependent tool routing, and *behavior-envelope*
+rules (tool budgets, uncertainty policy, stop/escalation) are **protected** — by section
+structure and by keyword. The optional `--llm` pass does a real semantic rewrite, but it is
+**accepted only if every protected line survives** — the model can't silently drop a rule.
+
 ## ✦ Connecting your AI model (for `--llm`)
 
 Set **one** of these before running (whichever service you have a key for):
@@ -129,13 +157,16 @@ Point any MCP client at `aura-mcp`. stdout stays pure JSON-RPC (logs go to stder
 { "mcpServers": { "aura": { "command": "npx", "args": ["-y", "-p", "shaddai-aura", "aura-mcp"] } } }
 ```
 
-It exposes three zero-dependency tools:
+It exposes six zero-dependency tools:
 
 | Tool | What it does |
 |---|---|
 | `aura_ask` | Try to answer a prompt for **free** (cache / saved skill / compute). The model calls this *first*; on a hit it skips its own reasoning. |
 | `aura_remember` | Cache an answer the model just generated, so it's free next time. |
 | `aura_stats` | Show tokens & dollars saved. |
+| `aura_distill` | Trim redundant instructions from a prompt/system-prompt (protects safety/output/routing rules; flags the rest). |
+| `aura_compress` | Shrink a long conversation history before the next turn. |
+| `aura_savings` | Combined answer-cache + tool-cache savings report. |
 
 **Claude Code:** `claude mcp add aura -- npx -y -p shaddai-aura aura-mcp`
 
@@ -147,6 +178,11 @@ It exposes three zero-dependency tools:
 | **COMPUTE** | deterministic math/logic answered locally |
 | **SEED / QUERY** | seeded facts + structured lookups |
 | **SKILL / RECIPE** | author-defined skills run without the model |
+| **COMPRESS** | shrink the conversation history before each turn |
+| **DISTILL** | trim redundant instructions from the prompt/system-prompt itself |
+
+AURA saves on all three surfaces: the **answer** (cache/compute/skill), the **history**
+(compress), and the **instructions** (distill).
 
 Core audited safe: no `eval` / `Function` / `child_process` / shell, bounded cache, zero deps.
 
@@ -156,9 +192,9 @@ Core audited safe: no `eval` / `Function` / `child_process` / shell, bounded cac
 
 | Repo | What |
 |------|------|
-| **[Shaddai](https://github.com/IzzoIzzoIzzo/Shaddai)** | The sovereign AI agent empire — 7 agents, 200+ real tools |
-| **[aura](https://github.com/IzzoIzzoIzzo/aura)** | *(this)* dependency-free token-saver · CLI + MCP + library |
-| **[Shaddai-Clipper-Feature-](https://github.com/IzzoIzzoIzzo/Shaddai-Clipper-Feature-)** | Long video → captioned vertical shorts |
+| **[Shaddai](https://github.com/IzzoSol/Shaddai)** | The sovereign AI agent empire — 7 agents, 200+ real tools |
+| **[aura](https://github.com/IzzoSol/aura)** | *(this)* dependency-free token-saver · CLI + MCP + library |
+| **[Shaddai-Clipper-Feature-](https://github.com/IzzoSol/Shaddai-Clipper-Feature-)** | Long video → captioned vertical shorts |
 
 <div align="center">
 <br>

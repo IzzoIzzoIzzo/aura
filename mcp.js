@@ -12,6 +12,7 @@
 const aura = require('./aura-core');
 const { compress } = require('./lib/context-compress');
 const { toolStats } = require('./lib/tool-cache');
+const { distill } = require('./lib/prompt-distill');
 let PKG = { version: '0.0.0' };
 try { PKG = require('./package.json'); } catch (_) {}
 
@@ -98,6 +99,25 @@ const TOOLS = [
       'Combined AURA savings report: the answer-cache stats (prompts answered for free) PLUS the tool-cache stats ' +
       '(repeated tool calls avoided and the tokens that saved). One JSON payload for a full picture of what AURA has saved.',
     inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'aura_distill',
+    description:
+      "Trim redundant instructions from a prompt or system prompt to save tokens on EVERY call. " +
+      'Deterministically removes exact/near-duplicate rules and leading filler, and FLAGS (never cuts) possibly-dead ' +
+      'examples — while NEVER touching load-bearing lines: safety/permission constraints, success/stopping criteria, ' +
+      'required output shape, context-dependent tool routing, and behavior-envelope rules (tool budgets, uncertainty ' +
+      'policy, stop/escalation). Returns the leaner prompt plus a report (removed/flagged/protected + tokens saved). ' +
+      'Call this on a long system prompt before using it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'The prompt / system prompt to distill.' },
+        similarity: { type: 'number', description: 'Near-duplicate threshold 0-1 (default 0.82).' },
+        trimFiller: { type: 'boolean', description: 'Strip leading hedge/filler prefixes (default true).' }
+      },
+      required: ['prompt']
+    }
   }
 ];
 
@@ -141,6 +161,14 @@ async function callTool(name, args) {
     if (Number(args.maxTokens) > 0) opts.maxTokens = Number(args.maxTokens);
     const result = compress(safe, opts);
     return textResult({ messages: result.messages, stats: result.stats });
+  }
+  if (name === 'aura_distill') {
+    const opts = {};
+    if (Number(args.similarity) > 0) opts.similarity = Number(args.similarity);
+    if (args.trimFiller === false) opts.trimFiller = false;
+    const res = distill(clip(args.prompt, MAX_PROMPT), opts);
+    try { if (res.report.stats.saved > 0) aura.recordDistill(res.report.stats.saved); } catch (_) {}
+    return textResult({ distilled: res.distilled, report: res.report });
   }
   if (name === 'aura_savings') {
     let answerCache = {};

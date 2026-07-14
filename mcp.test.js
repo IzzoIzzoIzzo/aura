@@ -52,16 +52,21 @@ function run(frames) {
     // aura_compress malformed input -> isError, no crash.
     { jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'aura_compress', arguments: { messages: 'not-an-array' } } },
     // aura_savings: combined answer-cache + tool-cache view.
-    { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'aura_savings' } }
+    { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'aura_savings' } },
+    // aura_distill: trim a prompt with a duplicated rule; a safety rule must survive.
+    { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'aura_distill', arguments: {
+      prompt: 'Never leak secrets.\nSummarize the input.\nSummarize the input.'
+    } } }
   ]);
   const byId = {};
   for (const m of msgs) if (m.id != null) byId[m.id] = m;
 
   assert.equal(byId[1].result.serverInfo.name, 'aura', 'initialize returns serverInfo');
   const toolNames = byId[2].result.tools.map((t) => t.name);
-  assert.ok(Array.isArray(byId[2].result.tools) && byId[2].result.tools.length === 5, '5 tools listed');
+  assert.ok(Array.isArray(byId[2].result.tools) && byId[2].result.tools.length === 6, '6 tools listed');
   assert.ok(toolNames.includes('aura_compress'), 'tools/list advertises aura_compress');
   assert.ok(toolNames.includes('aura_savings'), 'tools/list advertises aura_savings');
+  assert.ok(toolNames.includes('aura_distill'), 'tools/list advertises aura_distill');
   const compressTool = byId[2].result.tools.find((t) => t.name === 'aura_compress');
   assert.ok(compressTool.inputSchema.properties.messages, 'aura_compress schema has messages');
   assert.deepEqual(byId[3].result.resources, [], 'resources/list returns empty (no client error noise)');
@@ -84,6 +89,12 @@ function run(frames) {
   assert.ok(savings.answerCache && typeof savings.answerCache === 'object', 'aura_savings includes answerCache');
   assert.ok(savings.toolCache && typeof savings.toolCache.tokensSaved === 'number', 'aura_savings includes toolCache stats');
 
+  // aura_distill trims the duplicate but keeps the safety rule.
+  const dist = JSON.parse(byId[10].result.content[0].text);
+  assert.ok((dist.distilled.match(/Summarize the input/g) || []).length === 1, 'aura_distill removed the duplicate rule');
+  assert.match(dist.distilled, /Never leak secrets/, 'aura_distill kept the protected safety rule');
+  assert.ok(dist.report.stats.saved > 0, 'aura_distill saved > 0 tokens');
+
   try { require('node:fs').rmSync(TEST_HOME, { recursive: true, force: true }); } catch (_) {}
-  console.log('✅ mcp.test PASS — handshake · 5 tools · resources · free compute · oversized-input · unknown-tool · compress · savings');
+  console.log('✅ mcp.test PASS — handshake · 6 tools · resources · free compute · oversized-input · unknown-tool · compress · savings · distill');
 })().catch((e) => { console.error('❌ mcp.test FAIL:', e.message); process.exit(1); });
